@@ -1,4 +1,3 @@
-
 /*
  *  OSXvnc Copyright (C) 2001 Dan McGuirk <mcguirk@incompleteness.net>.
  *  Original Xvnc code Copyright (C) 1999 AT&T Laboratories Cambridge.  
@@ -38,6 +37,7 @@
 #include <stdlib.h>
 
 #import "ScreenCapturer.h"
+#import "Clipboard.h"
 
 /* The main LibVNCServer screen object */
 rfbScreenInfoPtr rfbScreen;
@@ -164,6 +164,8 @@ static int specialKeyMap[] = {
 rfbBool isShiftDown;
 rfbBool isAltGrDown;
 
+/* Global clipboard object */
+Clipboard *clipboard = nil;
 
 static int
 saveDimSettings(void)
@@ -428,6 +430,13 @@ PtrAddEvent(int buttonMask, int x, int y, rfbClientPtr cl)
     }
 }
 
+void setXCutText(char *text, int len, rfbClientPtr cl) {
+    NSString *clipboardContent = [[NSString alloc] initWithBytes:text length:len encoding:NSUTF8StringEncoding];
+    if (clipboard) {
+        [clipboard setClipboard:clipboardContent];
+    }
+}
+
 
 /*
   Initialises keyboard handling:
@@ -561,6 +570,7 @@ ScreenInit(int argc, char**argv)
 
   rfbScreen->ptrAddEvent = PtrAddEvent;
   rfbScreen->kbdAddEvent = KbdAddEvent;
+  rfbScreen->setXCutText = setXCutText;
 
   ScreenCapturer *capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
                                                         frameHandler:^(CMSampleBufferRef sampleBuffer) {
@@ -685,6 +695,11 @@ int main(int argc,char *argv[])
   if(!ScreenInit(argc,argv))
       exit(1);
   rfbScreen->newClientHook = newClient;
+
+  clipboard = [[Clipboard alloc] initWithObject: rfbScreen
+                                       onChange:^(NSString *text) {
+          rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
+  }];
 
   rfbRunEventLoop(rfbScreen,-1,TRUE);
 

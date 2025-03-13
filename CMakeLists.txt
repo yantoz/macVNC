@@ -18,6 +18,7 @@ endif(CMAKE_GENERATOR MATCHES "Unix Makefiles|Ninja")
 find_package(LibVNCServer REQUIRED)
 find_package(Threads REQUIRED)
 find_library(CARBON_LIBRARY Carbon REQUIRED)
+find_library(COCOA_LIBRARY Cocoa REQUIRED)
 find_library(IOKIT_LIBRARY IOKit REQUIRED)
 find_library(SCREEN_CAPTURE_KIT ScreenCaptureKit REQUIRED)
 find_library(CORE_MEDIA CoreMedia)
@@ -30,6 +31,8 @@ find_library(FOUNDATION Foundation)
 set(SOURCE_FILES
     src/ScreenCapturer.h
     src/ScreenCapturer.m
+    src/Clipboard.h
+    src/Clipboard.m
     src/mac.m
     src/icon.icns
 )
@@ -45,6 +48,7 @@ set_source_files_properties(src/icon.icns PROPERTIES MACOSX_PACKAGE_LOCATION Res
 add_executable(${PROJECT_NAME} MACOSX_BUNDLE ${SOURCE_FILES})
 
 target_link_libraries(${PROJECT_NAME} LibVNCServer::vncserver ${CMAKE_THREAD_LIBS_INIT} ${CARBON_LIBRARY} ${IOKIT_LIBRARY}
+  ${COCOA_LIBRARY}
   ${SCREEN_CAPTURE_KIT}
   ${CORE_MEDIA}
   ${CORE_VIDEO}
