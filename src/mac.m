@@ -576,9 +576,19 @@ ScreenInit(int argc, char**argv)
 
           CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
-          memcpy(backBuffer,
-                 CVPixelBufferGetBaseAddress(pixelBuffer),
-                 CGDisplayPixelsWide(displayID) *  CGDisplayPixelsHigh(displayID) * 4);
+          // On Macbook Air M1 with detected screen size of 1680x1050, the reported width of
+          // pixelBuffer is correct at 1680 but the row byte size is 6784 rather than 6720,
+          // so the safe way to copy pixelBuffer is by doing it row-by-row.
+
+          void *baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer);
+          void *dstAddress = backBuffer;
+          size_t srcBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer);
+          size_t dstBytesPerRow = CGDisplayPixelsWide(displayID) * 4;
+
+          for (size_t offset=0; offset < CGDisplayPixelsHigh(displayID)*srcBytesPerRow; offset += srcBytesPerRow) {
+              memcpy(dstAddress, baseAddress+offset, dstBytesPerRow);
+              dstAddress += dstBytesPerRow;
+          }
 
           CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
