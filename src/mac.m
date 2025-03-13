@@ -348,36 +348,36 @@ KbdAddEvent(rfbBool down, rfbKeySym keySym, struct _rfbClientRec* cl)
     }
 
     if(specialKeyFound) {
-	/* keycode for special key found */
-	keyboardEvent = CGEventCreateKeyboardEvent(eventSource, keyCode, down);
-	/* save state of shifting modifiers */
-	if(keySym == XK_ISO_Level3_Shift)
-	    isAltGrDown = down;
-	if(keySym == XK_Shift_L || keySym == XK_Shift_R)
-	    isShiftDown = down;
+    /* keycode for special key found */
+    keyboardEvent = CGEventCreateKeyboardEvent(eventSource, keyCode, down);
+    /* save state of shifting modifiers */
+    if(keySym == XK_ISO_Level3_Shift)
+        isAltGrDown = down;
+    if(keySym == XK_Shift_L || keySym == XK_Shift_R)
+        isShiftDown = down;
 
     } else {
-	/* look for char key */
-	size_t keyCodeFromDict;
-	CFStringRef charStr = CFStringCreateWithCharacters(kCFAllocatorDefault, (UniChar*)&keySym, 1);
-	CFMutableDictionaryRef keyMap = charKeyMap;
-	if(isShiftDown && !isAltGrDown)
-	    keyMap = charShiftKeyMap;
-	if(!isShiftDown && isAltGrDown)
-	    keyMap = charAltGrKeyMap;
-	if(isShiftDown && isAltGrDown)
-	    keyMap = charShiftAltGrKeyMap;
+    /* look for char key */
+    size_t keyCodeFromDict;
+    CFStringRef charStr = CFStringCreateWithCharacters(kCFAllocatorDefault, (UniChar*)&keySym, 1);
+    CFMutableDictionaryRef keyMap = charKeyMap;
+    if(isShiftDown && !isAltGrDown)
+        keyMap = charShiftKeyMap;
+    if(!isShiftDown && isAltGrDown)
+        keyMap = charAltGrKeyMap;
+    if(isShiftDown && isAltGrDown)
+        keyMap = charShiftAltGrKeyMap;
 
-	if (CFDictionaryGetValueIfPresent(keyMap, charStr, (const void **)&keyCodeFromDict)) {
-	    /* keycode for ASCII key found */
-	    keyboardEvent = CGEventCreateKeyboardEvent(eventSource, keyCodeFromDict, down);
-	} else {
-	    /* last resort: use the symbol's utf-16 value, does not support modifiers though */
-	    keyboardEvent = CGEventCreateKeyboardEvent(eventSource, 0, down);
-	    CGEventKeyboardSetUnicodeString(keyboardEvent, 1, (UniChar*)&keySym);
+    if (CFDictionaryGetValueIfPresent(keyMap, charStr, (const void **)&keyCodeFromDict)) {
+        /* keycode for ASCII key found */
+        keyboardEvent = CGEventCreateKeyboardEvent(eventSource, keyCodeFromDict, down);
+    } else {
+        /* last resort: use the symbol's utf-16 value, does not support modifiers though */
+        keyboardEvent = CGEventCreateKeyboardEvent(eventSource, 0, down);
+        CGEventKeyboardSetUnicodeString(keyboardEvent, 1, (UniChar*)&keySym);
         }
 
-	CFRelease(charStr);
+    CFRelease(charStr);
     }
 
     /* Set the Shift modifier explicitly as MacOS sometimes gets internal state wrong and Shift stuck. */
@@ -402,30 +402,30 @@ PtrAddEvent(int buttonMask, int x, int y, rfbClientPtr cl)
 
     /* map buttons 4 5 6 7 to scroll events as per https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#745pointerevent */
     if(buttonMask & (1 << 3))
-	mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 1, 0);
+    mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 1, 0);
     if(buttonMask & (1 << 4))
-	mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, -1, 0);
+    mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, -1, 0);
     if(buttonMask & (1 << 5))
-	mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 0, 1);
+    mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 0, 1);
     if(buttonMask & (1 << 6))
-	mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 0, -1);
+    mouseEvent = CGEventCreateScrollWheelEvent(eventSource, kCGScrollEventUnitLine, 2, 0, -1);
 
     if (mouseEvent) {
-	CGEventPost(kCGSessionEventTap, mouseEvent);
-	CFRelease(mouseEvent);
+    CGEventPost(kCGSessionEventTap, mouseEvent);
+    CFRelease(mouseEvent);
     }
     else {
-	/*
-	  Use the deprecated CGPostMouseEvent API here as we get a buttonmask plus position which is pretty low-level
-	  whereas CGEventCreateMouseEvent is expecting higher-level events. This allows for direct injection of
-	  double clicks and drags whereas we would need to synthesize these events for the high-level API.
-	 */
+    /*
+      Use the deprecated CGPostMouseEvent API here as we get a buttonmask plus position which is pretty low-level
+      whereas CGEventCreateMouseEvent is expecting higher-level events. This allows for direct injection of
+      double clicks and drags whereas we would need to synthesize these events for the high-level API.
+     */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-	CGPostMouseEvent(position, TRUE, 3,
-			 (buttonMask & (1 << 0)) ? TRUE : FALSE,
-			 (buttonMask & (1 << 2)) ? TRUE : FALSE,
-			 (buttonMask & (1 << 1)) ? TRUE : FALSE);
+    CGPostMouseEvent(position, TRUE, 3,
+             (buttonMask & (1 << 0)) ? TRUE : FALSE,
+             (buttonMask & (1 << 2)) ? TRUE : FALSE,
+             (buttonMask & (1 << 1)) ? TRUE : FALSE);
 #pragma clang diagnostic pop
     }
 }
@@ -449,8 +449,8 @@ rfbBool keyboardInit()
     const UCKeyboardLayout *keyboardLayout;
 
     if(!currentKeyboard) {
-	fprintf(stderr, "Could not get current keyboard info\n");
-	return FALSE;
+    fprintf(stderr, "Could not get current keyboard info\n");
+    return FALSE;
     }
 
     keyboardLayout = (const UCKeyboardLayout *)CFDataGetBytePtr(TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData));
@@ -463,50 +463,50 @@ rfbBool keyboardInit()
     charShiftAltGrKeyMap = CFDictionaryCreateMutable(kCFAllocatorDefault, keyCodeCount, &kCFCopyStringDictionaryKeyCallBacks, NULL);
 
     if(!charKeyMap || !charShiftKeyMap || !charAltGrKeyMap || !charShiftAltGrKeyMap) {
-	fprintf(stderr, "Could not create keymaps\n");
-	return FALSE;
+    fprintf(stderr, "Could not create keymaps\n");
+    return FALSE;
     }
 
     /* Loop through every keycode to find the character it is mapping to. */
     for (i = 0; i < keyCodeCount; ++i) {
-	UInt32 deadKeyState = 0;
-	UniChar chars[4];
-	UniCharCount realLength;
-	UInt32 m, modifiers[] = {0, kCGEventFlagMaskShift, kCGEventFlagMaskAlternate, kCGEventFlagMaskShift|kCGEventFlagMaskAlternate};
+    UInt32 deadKeyState = 0;
+    UniChar chars[4];
+    UniCharCount realLength;
+    UInt32 m, modifiers[] = {0, kCGEventFlagMaskShift, kCGEventFlagMaskAlternate, kCGEventFlagMaskShift|kCGEventFlagMaskAlternate};
 
-	/* do this for no modifier, shift and alt-gr applied */
-	for(m = 0; m < sizeof(modifiers) / sizeof(modifiers[0]); ++m) {
-	    UCKeyTranslate(keyboardLayout,
-			   i,
-			   kUCKeyActionDisplay,
-			   (modifiers[m] >> 16) & 0xff,
-			   LMGetKbdType(),
-			   kUCKeyTranslateNoDeadKeysBit,
-			   &deadKeyState,
-			   sizeof(chars) / sizeof(chars[0]),
-			   &realLength,
-			   chars);
+    /* do this for no modifier, shift and alt-gr applied */
+    for(m = 0; m < sizeof(modifiers) / sizeof(modifiers[0]); ++m) {
+        UCKeyTranslate(keyboardLayout,
+               i,
+               kUCKeyActionDisplay,
+               (modifiers[m] >> 16) & 0xff,
+               LMGetKbdType(),
+               kUCKeyTranslateNoDeadKeysBit,
+               &deadKeyState,
+               sizeof(chars) / sizeof(chars[0]),
+               &realLength,
+               chars);
 
-	    CFStringRef string = CFStringCreateWithCharacters(kCFAllocatorDefault, chars, 1);
-	    if(string) {
-		switch(modifiers[m]) {
-		case 0:
-		    CFDictionaryAddValue(charKeyMap, string, (const void *)i);
-		    break;
-		case kCGEventFlagMaskShift:
-		    CFDictionaryAddValue(charShiftKeyMap, string, (const void *)i);
-		    break;
-		case kCGEventFlagMaskAlternate:
-		    CFDictionaryAddValue(charAltGrKeyMap, string, (const void *)i);
-		    break;
-		case kCGEventFlagMaskShift|kCGEventFlagMaskAlternate:
-		    CFDictionaryAddValue(charShiftAltGrKeyMap, string, (const void *)i);
-		    break;
-		}
+        CFStringRef string = CFStringCreateWithCharacters(kCFAllocatorDefault, chars, 1);
+        if(string) {
+        switch(modifiers[m]) {
+        case 0:
+            CFDictionaryAddValue(charKeyMap, string, (const void *)i);
+            break;
+        case kCGEventFlagMaskShift:
+            CFDictionaryAddValue(charShiftKeyMap, string, (const void *)i);
+            break;
+        case kCGEventFlagMaskAlternate:
+            CFDictionaryAddValue(charAltGrKeyMap, string, (const void *)i);
+            break;
+        case kCGEventFlagMaskShift|kCGEventFlagMaskAlternate:
+            CFDictionaryAddValue(charShiftAltGrKeyMap, string, (const void *)i);
+            break;
+        }
 
-		CFRelease(string);
-	    }
-	}
+        CFRelease(string);
+        }
+    }
     }
 
     CFRelease(currentKeyboard);
@@ -518,61 +518,61 @@ rfbBool keyboardInit()
 rfbBool
 ScreenInit(int argc, char**argv)
 {
-  int bitsPerSample = 8;
-  CGDisplayCount displayCount;
-  CGDirectDisplayID displays[32];
+    int bitsPerSample = 8;
+    CGDisplayCount displayCount;
+    CGDirectDisplayID displays[32];
 
-  /* grab the active displays */
-  CGGetActiveDisplayList(32, displays, &displayCount);
-  for (int i=0; i<displayCount; i++) {
-      CGRect bounds = CGDisplayBounds(displays[i]);
-      printf("Found %s display %d at (%d,%d) and a resolution of %dx%d\n", (CGDisplayIsMain(displays[i]) ? "primary" : "secondary"), i, (int)bounds.origin.x, (int)bounds.origin.y, (int)bounds.size.width, (int)bounds.size.height);
-  }
-  if(displayNumber < 0) {
-      printf("Using primary display as a default\n");
-      displayID = CGMainDisplayID();
-  } else if (displayNumber < displayCount) {
-      printf("Using specified display %d\n", displayNumber);
-      displayID = displays[displayNumber];
-  } else {
-      fprintf(stderr, "Specified display %d does not exist\n", displayNumber);
-      return FALSE;
-  }
+    /* grab the active displays */
+    CGGetActiveDisplayList(32, displays, &displayCount);
+    for (int i=0; i<displayCount; i++) {
+        CGRect bounds = CGDisplayBounds(displays[i]);
+        printf("Found %s display %d at (%d,%d) and a resolution of %dx%d\n", (CGDisplayIsMain(displays[i]) ? "primary" : "secondary"), i, (int)bounds.origin.x, (int)bounds.origin.y, (int)bounds.size.width, (int)bounds.size.height);
+    }
+    if(displayNumber < 0) {
+        printf("Using primary display as a default\n");
+        displayID = CGMainDisplayID();
+    } else if (displayNumber < displayCount) {
+        printf("Using specified display %d\n", displayNumber);
+        displayID = displays[displayNumber];
+    } else {
+        fprintf(stderr, "Specified display %d does not exist\n", displayNumber);
+        return FALSE;
+    }
 
 
-  rfbScreen = rfbGetScreen(&argc,argv,
-			   CGDisplayPixelsWide(displayID),
-			   CGDisplayPixelsHigh(displayID),
-			   bitsPerSample,
-			   3,
-			   4);
-  if(!rfbScreen) {
-      rfbErr("Could not init rfbScreen.\n");
-      return FALSE;
-  }
+    rfbScreen = rfbGetScreen(&argc,argv,
+                CGDisplayPixelsWide(displayID),
+                CGDisplayPixelsHigh(displayID),
+                bitsPerSample,
+                3,
+                4);
+    if(!rfbScreen) {
+        rfbErr("Could not init rfbScreen.\n");
+        return FALSE;
+    }
 
-  rfbScreen->serverFormat.redShift = bitsPerSample*2;
-  rfbScreen->serverFormat.greenShift = bitsPerSample*1;
-  rfbScreen->serverFormat.blueShift = 0;
+    rfbScreen->serverFormat.redShift = bitsPerSample*2;
+    rfbScreen->serverFormat.greenShift = bitsPerSample*1;
+    rfbScreen->serverFormat.blueShift = 0;
 
-  gethostname(rfbScreen->thisHost, 255);
+    gethostname(rfbScreen->thisHost, 255);
 
-  frameBufferOne = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
-  frameBufferTwo = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
+    frameBufferOne = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
+    frameBufferTwo = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
 
-  /* back buffer */
-  backBuffer = frameBufferOne;
-  /* front buffer */
-  rfbScreen->frameBuffer = frameBufferTwo;
+    /* back buffer */
+    backBuffer = frameBufferOne;
+    /* front buffer */
+    rfbScreen->frameBuffer = frameBufferTwo;
 
-  /* we already capture the cursor in the framebuffer */
-  rfbScreen->cursor = NULL;
+    /* we already capture the cursor in the framebuffer */
+    rfbScreen->cursor = NULL;
 
-  rfbScreen->ptrAddEvent = PtrAddEvent;
-  rfbScreen->kbdAddEvent = KbdAddEvent;
-  rfbScreen->setXCutText = setXCutText;
+    rfbScreen->ptrAddEvent = PtrAddEvent;
+    rfbScreen->kbdAddEvent = KbdAddEvent;
+    rfbScreen->setXCutText = setXCutText;
 
-  ScreenCapturer *capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
+    ScreenCapturer *capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
                                                         frameHandler:^(CMSampleBufferRef sampleBuffer) {
           rfbClientIteratorPtr iterator;
           rfbClientPtr cl;
@@ -632,19 +632,19 @@ ScreenInit(int argc, char**argv)
           }
           rfbReleaseClientIterator(iterator);
 
-      } errorHandler:^(NSError *error) {
+    } errorHandler:^(NSError *error) {
           fprintf(stderr, "Error: %s\n", [error.description UTF8String]);
           if(error.code == SCStreamErrorUserDeclined) {
               fprintf(stderr, "Could not get screen contents. Check if the program has been given screen recording permissions in 'System Preferences'->'Security & Privacy'->'Privacy'->'Screen Recording'.\n");
           }
           //TODO handle other errors
           exit(EXIT_FAILURE);
-      }];
-  [capturer startCapture];
+    }];
+    [capturer startCapture];
 
-  rfbInitServer(rfbScreen);
+    rfbInitServer(rfbScreen);
 
-  return TRUE;
+    return TRUE;
 }
 
 
@@ -655,70 +655,70 @@ void clientGone(rfbClientPtr cl)
 
 enum rfbNewClientAction newClient(rfbClientPtr cl)
 {
-  cl->clientGoneHook = clientGone;
-  cl->viewOnly = viewOnly;
+    cl->clientGoneHook = clientGone;
+    cl->viewOnly = viewOnly;
 
-  return(RFB_CLIENT_ACCEPT);
+    return(RFB_CLIENT_ACCEPT);
 }
 
 int main(int argc,char *argv[])
 {
-  int i;
+    int i;
 
-  for(i=argc-1;i>0;i--)
-    if(strcmp(argv[i],"-viewonly")==0) {
-      viewOnly=TRUE;
-    } else if(strcmp(argv[i],"-display")==0) {
-	displayNumber = atoi(argv[i+1]);
-    } else if(strcmp(argv[i],"-h") == 0 || strcmp(argv[i],"--help") == 0)  {
-        fprintf(stderr, "-viewonly              Do not allow any input\n");
-        fprintf(stderr, "-display <index>       Only export specified display\n");
-        rfbUsage();
-        exit(EXIT_SUCCESS);
+    for(i=argc-1;i>0;i--)
+        if(strcmp(argv[i],"-viewonly")==0) {
+            viewOnly=TRUE;
+        } else if(strcmp(argv[i],"-display")==0) {
+            displayNumber = atoi(argv[i+1]);
+        } else if(strcmp(argv[i],"-h") == 0 || strcmp(argv[i],"--help") == 0)  {
+            fprintf(stderr, "-viewonly              Do not allow any input\n");
+            fprintf(stderr, "-display <index>       Only export specified display\n");
+            rfbUsage();
+            exit(EXIT_SUCCESS);
+        }
+
+    if(!viewOnly && !AXIsProcessTrusted()) {
+        fprintf(stderr, "You have configured the server to post input events, but it does not have the necessary system permission. Please check if the program has been given permission to control your computer in 'System Preferences'->'Security & Privacy'->'Privacy'->'Accessibility'.\n");
+        exit(1);
     }
 
-  if(!viewOnly && !AXIsProcessTrusted()) {
-      fprintf(stderr, "You have configured the server to post input events, but it does not have the necessary system permission. Please check if the program has been given permission to control your computer in 'System Preferences'->'Security & Privacy'->'Privacy'->'Accessibility'.\n");
-      exit(1);
-  }
+    dimmingInit();
 
-  dimmingInit();
+    /* Create a private event source for the server. This helps a lot with modifier keys getting stuck on the OS side
+       (but does not completely mitigate the issue: For this, we keep track of modifier key state and set it specifically
+       for the generated keyboard event in the keyboard event handler). */
+    eventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
 
-  /* Create a private event source for the server. This helps a lot with modifier keys getting stuck on the OS side
-     (but does not completely mitigate the issue: For this, we keep track of modifier key state and set it specifically
-     for the generated keyboard event in the keyboard event handler). */
-  eventSource = CGEventSourceCreate(kCGEventSourceStatePrivate);
+    if(!keyboardInit())
+        exit(1);
 
-  if(!keyboardInit())
-      exit(1);
+    if(!ScreenInit(argc,argv))
+        exit(1);
+    rfbScreen->newClientHook = newClient;
 
-  if(!ScreenInit(argc,argv))
-      exit(1);
-  rfbScreen->newClientHook = newClient;
+    clipboard = [[Clipboard alloc] initWithObject: rfbScreen
+                                         onChange:^(NSString *text) {
+        rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
+    }];
 
-  clipboard = [[Clipboard alloc] initWithObject: rfbScreen
-                                       onChange:^(NSString *text) {
-          rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
-  }];
+    rfbRunEventLoop(rfbScreen,-1,TRUE);
 
-  rfbRunEventLoop(rfbScreen,-1,TRUE);
+    /*
+        The VNC machinery is in the background now and framebuffer updating happens on another thread as well.
+     */
+    while(1) {
+        /* Nothing left to do on the main thread. */
+        sleep(1);
+    }
 
-  /*
-     The VNC machinery is in the background now and framebuffer updating happens on another thread as well.
-  */
-  while(1) {
-      /* Nothing left to do on the main thread. */
-      sleep(1);
-  }
+    dimmingShutdown();
 
-  dimmingShutdown();
-
-  return(0); /* never ... */
+    return(0); /* never ... */
 }
 
 void serverShutdown(rfbClientPtr cl)
 {
-  rfbScreenCleanup(rfbScreen);
-  dimmingShutdown();
-  exit(0);
+    rfbScreenCleanup(rfbScreen);
+    dimmingShutdown();
+    exit(0);
 }
