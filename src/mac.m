@@ -167,6 +167,9 @@ rfbBool isAltGrDown;
 /* Global clipboard object */
 Clipboard *clipboard = nil;
 
+/* Global connected clients count */
+int connectedClients = 0;
+
 static int
 saveDimSettings(void)
 {
@@ -431,6 +434,7 @@ PtrAddEvent(int buttonMask, int x, int y, rfbClientPtr cl)
 }
 
 void setXCutText(char *text, int len, rfbClientPtr cl) {
+    rfbLog("Received clipboard update from client\n");
     NSString *clipboardContent = [[NSString alloc] initWithBytes:text length:len encoding:NSUTF8StringEncoding];
     if (clipboard) {
         [clipboard setClipboard:clipboardContent];
@@ -516,7 +520,7 @@ rfbBool keyboardInit()
 
 
 rfbBool
-ScreenInit(int argc, char**argv)
+ScreenInit(int argc, char**argv, rfbScreenInfoPtr existingScreen)
 {
     int bitsPerSample = 8;
     CGDisplayCount displayCount;
@@ -526,138 +530,109 @@ ScreenInit(int argc, char**argv)
     CGGetActiveDisplayList(32, displays, &displayCount);
     for (int i=0; i<displayCount; i++) {
         CGRect bounds = CGDisplayBounds(displays[i]);
-        printf("Found %s display %d at (%d,%d) and a resolution of %dx%d\n", (CGDisplayIsMain(displays[i]) ? "primary" : "secondary"), i, (int)bounds.origin.x, (int)bounds.origin.y, (int)bounds.size.width, (int)bounds.size.height);
+        if (!existingScreen) printf("Found %s display %d at (%d,%d) and a resolution of %dx%d\n", (CGDisplayIsMain(displays[i]) ? "primary" : "secondary"), i, (int)bounds.origin.x, (int)bounds.origin.y, (int)bounds.size.width, (int)bounds.size.height);
     }
     if(displayNumber < 0) {
-        printf("Using primary display as a default\n");
+        if (!existingScreen) printf("Using primary display as a default\n");
         displayID = CGMainDisplayID();
     } else if (displayNumber < displayCount) {
-        printf("Using specified display %d\n", displayNumber);
+        if (!existingScreen) printf("Using specified display %d\n", displayNumber);
         displayID = displays[displayNumber];
     } else {
         fprintf(stderr, "Specified display %d does not exist\n", displayNumber);
         return FALSE;
     }
 
-
-    rfbScreen = rfbGetScreen(&argc,argv,
-                CGDisplayPixelsWide(displayID),
-                CGDisplayPixelsHigh(displayID),
-                bitsPerSample,
-                3,
-                4);
-    if(!rfbScreen) {
-        rfbErr("Could not init rfbScreen.\n");
-        return FALSE;
+    if (existingScreen && (!rfbIsActive(existingScreen) || existingScreen->socketState != RFB_SOCKET_READY)) {
+        existingScreen = nil;
     }
 
-    rfbScreen->serverFormat.redShift = bitsPerSample*2;
-    rfbScreen->serverFormat.greenShift = bitsPerSample*1;
-    rfbScreen->serverFormat.blueShift = 0;
+    if (existingScreen) {
+        if (existingScreen->width == CGDisplayPixelsWide(displayID) && existingScreen->height == CGDisplayPixelsHigh(displayID)) {
+            rfbScreen = existingScreen;
+        }
+        else {
+            rfbShutdownServer(existingScreen, TRUE);
+            rfbScreenCleanup(existingScreen);
+            free(frameBufferOne);
+            free(frameBufferTwo);
+            existingScreen = nil;
+        }
+    }
 
-    gethostname(rfbScreen->thisHost, 255);
+    if (!existingScreen) {
 
-    frameBufferOne = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
-    frameBufferTwo = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
+        char **argv_copy = malloc(argc * sizeof(char *));
+        for (int i=0; i < argc; i++) argv_copy[i] = argv[i];
 
-    /* back buffer */
-    backBuffer = frameBufferOne;
-    /* front buffer */
-    rfbScreen->frameBuffer = frameBufferTwo;
+        rfbScreen = rfbGetScreen(&argc, argv_copy,
+                    CGDisplayPixelsWide(displayID),
+                    CGDisplayPixelsHigh(displayID),
+                    bitsPerSample,
+                    3,
+                    4);
 
-    /* we already capture the cursor in the framebuffer */
-    rfbScreen->cursor = NULL;
+        free(argv_copy);
 
-    rfbScreen->ptrAddEvent = PtrAddEvent;
-    rfbScreen->kbdAddEvent = KbdAddEvent;
-    rfbScreen->setXCutText = setXCutText;
+        if(!rfbScreen) {
+            rfbErr("Could not init rfbScreen.\n");
+            return FALSE;
+        }
 
-    ScreenCapturer *capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
-                                                        frameHandler:^(CMSampleBufferRef sampleBuffer) {
-          rfbClientIteratorPtr iterator;
-          rfbClientPtr cl;
+        rfbScreen->serverFormat.redShift = bitsPerSample*2;
+        rfbScreen->serverFormat.greenShift = bitsPerSample*1;
+        rfbScreen->serverFormat.blueShift = 0;
 
-           /*
-             Copy new frame to back buffer.
-           */
-          CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
-          if(!pixelBuffer)
-              return;
+        gethostname(rfbScreen->thisHost, 255);
 
-          CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        frameBufferOne = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
+        frameBufferTwo = malloc(CGDisplayPixelsWide(displayID) * CGDisplayPixelsHigh(displayID) * 4);
 
-          // On Macbook Air M1 with detected screen size of 1680x1050, the reported width of
-          // pixelBuffer is correct at 1680 but the row byte size is 6784 rather than 6720,
-          // so the safe way to copy pixelBuffer is by doing it row-by-row.
+        /* back buffer */
+        backBuffer = frameBufferOne;
+        /* front buffer */
+        rfbScreen->frameBuffer = frameBufferTwo;
 
-          void *baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer);
-          void *dstAddress = backBuffer;
-          size_t srcBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer);
-          size_t dstBytesPerRow = CGDisplayPixelsWide(displayID) * 4;
+        /* we already capture the cursor in the framebuffer */
+        rfbScreen->cursor = NULL;
 
-          for (size_t offset=0; offset < CGDisplayPixelsHigh(displayID)*srcBytesPerRow; offset += srcBytesPerRow) {
-              memcpy(dstAddress, baseAddress+offset, dstBytesPerRow);
-              dstAddress += dstBytesPerRow;
-          }
+        rfbScreen->ptrAddEvent = PtrAddEvent;
+        rfbScreen->kbdAddEvent = KbdAddEvent;
+        rfbScreen->setXCutText = setXCutText;
 
-          CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
-
-          /* Lock out client reads. */
-          iterator=rfbGetClientIterator(rfbScreen);
-          while((cl=rfbClientIteratorNext(iterator))) {
-              LOCK(cl->sendMutex);
-          }
-          rfbReleaseClientIterator(iterator);
-
-          /* Swap framebuffers. */
-          if (backBuffer == frameBufferOne) {
-              backBuffer = frameBufferTwo;
-              rfbScreen->frameBuffer = frameBufferOne;
-          } else {
-              backBuffer = frameBufferOne;
-              rfbScreen->frameBuffer = frameBufferTwo;
-          }
-
-          /*
-            Mark modified rect in new framebuffer.
-            ScreenCaptureKit does not have something like CGDisplayStreamUpdateGetRects(),
-            so mark the whole framebuffer.
-           */
-          rfbMarkRectAsModified(rfbScreen, 0, 0, CGDisplayPixelsWide(displayID), CGDisplayPixelsHigh(displayID));
-
-          /* Swapping framebuffers finished, reenable client reads. */
-          iterator=rfbGetClientIterator(rfbScreen);
-          while((cl=rfbClientIteratorNext(iterator))) {
-              UNLOCK(cl->sendMutex);
-          }
-          rfbReleaseClientIterator(iterator);
-
-    } errorHandler:^(NSError *error) {
-          fprintf(stderr, "Error: %s\n", [error.description UTF8String]);
-          if(error.code == SCStreamErrorUserDeclined) {
-              fprintf(stderr, "Could not get screen contents. Check if the program has been given screen recording permissions in 'System Preferences'->'Security & Privacy'->'Privacy'->'Screen Recording'.\n");
-          }
-          //TODO handle other errors
-          exit(EXIT_FAILURE);
-    }];
-    [capturer startCapture];
-
-    rfbInitServer(rfbScreen);
+        rfbInitServer(rfbScreen);
+    }
 
     return TRUE;
 }
 
-
 void clientGone(rfbClientPtr cl)
 {
-    //TODO
+    int clientCount = 0;
+    rfbClientPtr client = rfbScreen->clientHead;
+    while (client) {
+        if (client->sock != -1) {
+            char buffer;
+            int result = recv(client->sock, &buffer, sizeof(buffer), MSG_PEEK | MSG_DONTWAIT);
+            if (result > 0) {
+                clientCount++;
+            } 
+            else if (result < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    clientCount++;
+                }
+            }
+        }
+        client = client->next;
+    }
+    connectedClients = clientCount;
 }
 
 enum rfbNewClientAction newClient(rfbClientPtr cl)
 {
+    connectedClients++;
     cl->clientGoneHook = clientGone;
     cl->viewOnly = viewOnly;
-
     return(RFB_CLIENT_ACCEPT);
 }
 
@@ -692,22 +667,143 @@ int main(int argc,char *argv[])
     if(!keyboardInit())
         exit(1);
 
-    if(!ScreenInit(argc,argv))
-        exit(1);
-    rfbScreen->newClientHook = newClient;
+    rfbScreen = nil;
 
-    clipboard = [[Clipboard alloc] initWithObject: rfbScreen
-                                         onChange:^(NSString *text) {
-        rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
-    }];
+    rfbBool serverRestarting = FALSE;
+    ScreenCapturer *capturer = nil;
 
-    rfbRunEventLoop(rfbScreen,-1,TRUE);
+    while (1) {
 
-    /*
-        The VNC machinery is in the background now and framebuffer updating happens on another thread as well.
-     */
-    while(1) {
-        /* Nothing left to do on the main thread. */
+        __block rfbBool serverInterrupted = FALSE;
+
+        if(!ScreenInit(argc, argv, rfbScreen))
+            exit(1);
+        rfbScreen->newClientHook = newClient;
+
+        clipboard = [[Clipboard alloc] initWithObject: rfbScreen
+                                             onChange:^(NSString *text) {
+            rfbLog("Sending clipboard update to clients\n");
+            rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
+        }];
+
+        long usec = rfbScreen->deferUpdateTime*1000;
+        rfbScreen->select_timeout_usec = usec;
+
+        while (!serverInterrupted && rfbIsActive(rfbScreen)) {
+
+            rfbProcessEvents(rfbScreen, usec);
+
+            if (!capturer && connectedClients) {
+
+                rfbLog("Starting screen capture\n");
+
+                capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
+                                                      frameHandler:^(CMSampleBufferRef sampleBuffer) {
+                    rfbClientIteratorPtr iterator;
+                    rfbClientPtr cl;
+
+                    /*
+                        Copy new frame to back buffer.
+                    */
+                    CVPixelBufferRef pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
+                    if(!pixelBuffer)
+                        return;
+
+                    CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+
+                    // On Macbook Air M1 with detected screen size of 1680x1050, the reported width of
+                    // pixelBuffer is correct at 1680 but the row byte size is 6784 rather than 6720,
+                    // so the safe way to copy pixelBuffer is by doing it row-by-row.
+
+                    void *baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer);
+                    void *dstAddress = backBuffer;
+                    size_t srcBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer);
+                    size_t dstBytesPerRow = CGDisplayPixelsWide(displayID) * 4;
+
+                    for (size_t offset=0; offset < CGDisplayPixelsHigh(displayID)*srcBytesPerRow; offset += srcBytesPerRow) {
+                        memcpy(dstAddress, baseAddress+offset, dstBytesPerRow);
+                        dstAddress += dstBytesPerRow;
+                    }
+
+                    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+
+                    /* Lock out client reads. */
+                    iterator=rfbGetClientIterator(rfbScreen);
+                    while((cl=rfbClientIteratorNext(iterator))) {
+                        LOCK(cl->sendMutex);
+                    }
+                    rfbReleaseClientIterator(iterator);
+
+                    /* Swap framebuffers. */
+                    if (backBuffer == frameBufferOne) {
+                        backBuffer = frameBufferTwo;
+                        rfbScreen->frameBuffer = frameBufferOne;
+                    } else {
+                        backBuffer = frameBufferOne;
+                        rfbScreen->frameBuffer = frameBufferTwo;
+                    }
+
+                    /*
+                        Mark modified rect in new framebuffer.
+                        ScreenCaptureKit does not have something like CGDisplayStreamUpdateGetRects(),
+                        so mark the whole framebuffer.
+                    */
+                    rfbMarkRectAsModified(rfbScreen, 0, 0, CGDisplayPixelsWide(displayID), CGDisplayPixelsHigh(displayID));
+
+                    /* Swapping framebuffers finished, reenable client reads. */
+                    iterator=rfbGetClientIterator(rfbScreen);
+                    while((cl=rfbClientIteratorNext(iterator))) {
+                        UNLOCK(cl->sendMutex);
+                    }
+                    rfbReleaseClientIterator(iterator);
+
+                } errorHandler:^(NSError *error) {
+                    if (error) {
+                        switch (error.code) {
+                            case SCStreamErrorUserDeclined:
+                                fprintf(stderr, "Could not get screen contents. Check if the program has been given screen recording permissions in 'System Preferences'->'Security & Privacy'->'Privacy'->'Screen Recording'.\n");
+                                exit(EXIT_FAILURE);
+                                break;
+                            case SCStreamErrorAttemptToStopStreamState:
+                                break;
+                            default:
+                                if (!serverRestarting) rfbLog("Error: %s\n", [error.description UTF8String]);
+                                serverInterrupted = TRUE;
+                                break;
+                        }
+                    }
+                    else {
+                        rfbLog("Screen capture interrupted\n");
+                        serverInterrupted = TRUE;
+                    }
+                }];
+                [capturer startCapture];
+
+            }
+
+            if (capturer && !connectedClients && !serverInterrupted) {
+                [capturer stopCapture];
+            }
+
+            if (serverRestarting) {
+                serverRestarting = FALSE;
+                rfbLog("Server resumed operation\n");
+            }
+        }
+
+        if (!serverRestarting) {
+            serverRestarting = TRUE;
+            rfbLog("Server interrupted\n");
+        }
+
+        [clipboard stopMonitoring];
+        [clipboard release];
+        clipboard = nil;
+
+        [capturer stopCapture];
+        [capturer release];
+        capturer = nil;
+
         sleep(1);
     }
 

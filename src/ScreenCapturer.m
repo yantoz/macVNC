@@ -32,9 +32,18 @@
             return;
         }
 
-        SCDisplay *display = content.displays[[content.displays indexOfObjectPassingTest:^BOOL(SCDisplay *_Nonnull d, NSUInteger idx, BOOL *_Nonnull stop) {
-                    return d.displayID == self.displayID;
-                }]];
+        //SCDisplay *display = content.displays[[content.displays indexOfObjectPassingTest:^BOOL(SCDisplay *_Nonnull d, NSUInteger idx, BOOL *_Nonnull stop) {
+        //            return d.displayID == self.displayID;
+        //        }]];
+        SCDisplay *display = nil;
+        if (content.displays) {
+            for (int i=0; i<content.displays.count; i++) {
+                if (content.displays[i].displayID == self.displayID) {
+                    display = content.displays[i];
+                    break;
+                }
+            }
+        }
 
         if (!display) {
             NSError *noDisplayError = [NSError errorWithDomain:@"ScreenCapturerErrorDomain"
@@ -75,9 +84,7 @@
 
 - (void)stopCapture {
     [self.stream stopCaptureWithCompletionHandler:^(NSError * _Nullable stopError) {
-        if (stopError) {
-            self.errorHandler(stopError);
-        }
+        self.errorHandler(stopError);
         self.stream = nil;
     }];
 }
@@ -91,6 +98,9 @@
     self.errorHandler(error);
 }
 
+- (void) streamDidBecomeInactive:(SCStream *) stream {
+    self.errorHandler(nil);
+}
 
 /*
   SCStreamOutput methods
