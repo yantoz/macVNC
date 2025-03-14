@@ -639,13 +639,17 @@ enum rfbNewClientAction newClient(rfbClientPtr cl)
 int main(int argc,char *argv[])
 {
     int i;
+    rfbBool verbose = FALSE;
 
     for(i=argc-1;i>0;i--)
         if(strcmp(argv[i],"-viewonly")==0) {
             viewOnly=TRUE;
         } else if(strcmp(argv[i],"-display")==0) {
             displayNumber = atoi(argv[i+1]);
+        } else if(strcmp(argv[i],"-v") == 0 || strcmp(argv[i],"-verbose") == 0) {
+            verbose = TRUE;
         } else if(strcmp(argv[i],"-h") == 0 || strcmp(argv[i],"--help") == 0)  {
+            fprintf(stderr, "-verbose               Verbose mode\n");
             fprintf(stderr, "-viewonly              Do not allow any input\n");
             fprintf(stderr, "-display <index>       Only export specified display\n");
             rfbUsage();
@@ -682,7 +686,7 @@ int main(int argc,char *argv[])
 
         clipboard = [[Clipboard alloc] initWithObject: rfbScreen
                                              onChange:^(NSString *text) {
-            rfbLog("Sending clipboard update to clients\n");
+            if (verbose) rfbLog("Sending clipboard update to clients\n");
             rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
         }];
 
@@ -695,7 +699,7 @@ int main(int argc,char *argv[])
 
             if (!capturer && connectedClients) {
 
-                rfbLog("Starting screen capture\n");
+                if (verbose) rfbLog("Starting screen capture\n");
 
                 capturer = [[ScreenCapturer alloc] initWithDisplay: displayID
                                                       frameHandler:^(CMSampleBufferRef sampleBuffer) {
@@ -787,13 +791,13 @@ int main(int argc,char *argv[])
 
             if (serverRestarting) {
                 serverRestarting = FALSE;
-                rfbLog("Server resumed operation\n");
+                if (verbose) rfbLog("Server resumed operation\n");
             }
         }
 
         if (!serverRestarting) {
             serverRestarting = TRUE;
-            rfbLog("Server interrupted\n");
+            if (verbose) rfbLog("Server interrupted\n");
         }
 
         [clipboard stopMonitoring];
