@@ -434,10 +434,12 @@ PtrAddEvent(int buttonMask, int x, int y, rfbClientPtr cl)
 }
 
 void setXCutText(char *text, int len, rfbClientPtr cl) {
-    rfbLog("Received clipboard update from client\n");
-    NSString *clipboardContent = [[NSString alloc] initWithBytes:text length:len encoding:NSUTF8StringEncoding];
-    if (clipboard) {
-        [clipboard setClipboard:clipboardContent];
+    if (connectedClients) { /* failsafe */
+        rfbLog("Received clipboard update from client\n");
+        if (clipboard) {
+            NSString *clipboardContent = [[NSString alloc] initWithBytes:text length:len encoding:NSUTF8StringEncoding];
+            [clipboard setClipboard:clipboardContent];
+        }
     }
 }
 
@@ -606,7 +608,7 @@ ScreenInit(int argc, char**argv, rfbScreenInfoPtr existingScreen)
     return TRUE;
 }
 
-void clientGone(rfbClientPtr cl)
+void updateConnectedClients()
 {
     int clientCount = 0;
     rfbClientPtr client = rfbScreen->clientHead;
@@ -626,6 +628,11 @@ void clientGone(rfbClientPtr cl)
         client = client->next;
     }
     connectedClients = clientCount;
+}
+
+void clientGone(rfbClientPtr cl)
+{
+    updateConnectedClients();
 }
 
 enum rfbNewClientAction newClient(rfbClientPtr cl)
@@ -684,10 +691,14 @@ int main(int argc,char *argv[])
             exit(1);
         rfbScreen->newClientHook = newClient;
 
+        updateConnectedClients();
+
         clipboard = [[Clipboard alloc] initWithObject: rfbScreen
                                              onChange:^(NSString *text) {
-            if (verbose) rfbLog("Sending clipboard update to clients\n");
-            rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
+            if (connectedClients) {
+                if (verbose) rfbLog("Sending clipboard update to clients\n");
+                rfbSendServerCutText(rfbScreen, (char *)[text UTF8String], (int)text.length);
+            }
         }];
 
         long usec = rfbScreen->deferUpdateTime*1000;
@@ -791,7 +802,7 @@ int main(int argc,char *argv[])
 
             if (serverRestarting) {
                 serverRestarting = FALSE;
-                if (verbose) rfbLog("Server resumed operation\n");
+                if (verbose) rfbLog("Server resumed operation (Connected clients: %d)\n", connectedClients);
             }
         }
 
